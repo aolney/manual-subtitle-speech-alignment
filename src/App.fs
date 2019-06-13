@@ -20,6 +20,9 @@ open Fulma
 open Fable.FontAwesome
 open Fable.FontAwesome.Free
 
+open WaveSurfer
+open System.IO
+
 //open Elmish.Browser.Navigation
 //open Elmish.Browser.UrlParser
 
@@ -31,6 +34,22 @@ let inline ofJson<'T> json = Decode.Auto.unsafeFromString<'T>(json)
 
 // TESTS
 let randomFeature() = [1;2;3]
+
+//Globals
+let [<Global>] URL: obj = jsNative
+let [<Global>] Audio: obj = jsNative
+
+let wavesurfer = 
+  WaveSurfer.create(
+     createObj [
+      "container" ==> "#waveform"
+      "waveColor" ==> "violet"
+      "progressColor" ==> "purple"
+  ]
+)
+// let audio = createNew Audio ()
+// audio?src <- URL?createObjectURL("/y/south-park-1-to-20/1-1.wav")
+// wavesurfer.load( audio )
 
 
 // Domain
@@ -54,12 +73,17 @@ type Datum =
 
 type Model = 
   {
+    WavPath : string
+    JsonPath : string
     Index : int
     Data : Datum[]
   }
 
 type Msg =
-    | UpdateInput of string
+    | UpdateText of string
+    | UpdateExpandedText of string
+    | UpdateWavPath of Browser.Types.FileList
+    | UpdateJsonPath of Browser.Types.FileList
     // | KeyUp of float
     | KeyDown of float
 
@@ -84,8 +108,23 @@ let subscribeToKeyEvents dispatch =
 
 let init () : Model * Cmd<Msg> =
   ( { 
+      WavPath = "*.wav"
+      JsonPath = "*.json"
       Index = 0; 
-      Data = [||] 
+      Data = [|   
+        {
+          Start= 184170
+          Stop= 184284
+          Text= "YES, HE CAN!"
+          Id= "Cartman-1-1-184170-184284"
+          WavFile= "1-1.wav"
+          FrontAligned= true
+          EndAligned= false
+          SumAlignmentDiff= 185171
+          ProportionAligned= 0.66666666666666663
+          ExpandedText= "YES, HE CAN!"
+        }
+      |] 
     }, [subscribeToKeyEvents] )
 
   
@@ -93,8 +132,16 @@ let init () : Model * Cmd<Msg> =
 // ---------------------------------------
 let update msg model =
   match msg with
-  | UpdateInput(input) ->
-      ({ model with Text = input}, [])
+  | UpdateText(input) ->
+      model.Data.[model.Index] <- { model.Data.[model.Index] with Text = input}
+      ( model, [])
+  | UpdateExpandedText(input) ->
+      model.Data.[model.Index] <- { model.Data.[model.Index] with ExpandedText = input}
+      ( model, [])
+  | UpdateWavPath(input) ->
+      ( {model with WavPath = input.[0].name}, [])
+  | UpdateJsonPath(input) ->
+      ( {model with JsonPath = input.[0].name}, [])
   // | KeyUp code ->
   //   match code with
   //   | Keys.Left -> model,[]
@@ -118,22 +165,76 @@ let view model dispatch =
   div [ ClassName "columns is-vcentered" ] [ 
     div [ ClassName "column" ] [ 
       h1 [ ClassName "title"] [ str "Manual Subtitle Speech Alignment"]
+      //Heading.h1 [ ] [ str "Manual Subtitle Speech Alignment"]
       div [ ClassName "content"] [
         p [] [ str "Load and correct one wav file's worth of speech alignment data at a time. Click on the cat in the corner for more information." ]
+        //https://jsfiddle.net/chintanbanugaria/uzva5byy/
+        //OnChange (fun ev -> !!ev.target?value |> ChangeStr |> dispatch )
+        Fulma.File.file [ 
+          Fulma.File.HasName
+          File.Props [ OnChange (fun ev ->  UpdateWavPath (ev.target?files |> unbox<Browser.Types.FileList>) |> dispatch ) ] 
+          // File.Props [ OnChange (fun ev ->  UpdateWavPath (ev.target?value) |> dispatch ) ] 
+          ] [ 
+          Fulma.File.label [ ] [ 
+            Fulma.File.input [ ]
+            Fulma.File.cta [ ] [ 
+              Fulma.File.icon [ ] [ 
+                Icon.icon [ ] [ 
+                  // i [ Class "fas fa-upload" ] [] 
+                  Fa.i [ Fa.Solid.Upload ] []
+                  ]
+              ]
+              Fulma.File.label [ ] [ str "Choose a file..." ] ]
+            Fulma.File.name [ ] [ str model.WavPath ] 
+          ] 
+        ] 
+        Fulma.File.file [ 
+          Fulma.File.HasName 
+          File.Props [ OnChange (fun ev ->  UpdateJsonPath (ev.target?files |> unbox<Browser.Types.FileList>) |> dispatch ) ] 
+          ] [ 
+          Fulma.File.label [ ] [ 
+            Fulma.File.input [ ]
+            Fulma.File.cta [ ] [ 
+              Fulma.File.icon [ ] [ 
+                Icon.icon [ ] [ 
+                  // i [ Class "fas fa-upload" ] [] 
+                  Fa.i [ Fa.Solid.Upload ] []
+                  ]
+              ]
+              Fulma.File.label [ ] [ str "Choose a file..." ] ]
+            Fulma.File.name [ ] [ str model.JsonPath ] 
+          ] 
+          
+        ] 
+        Button.button [ Button.Color IsPrimary ]
+                    [ str "Submit" ] 
+        h2 [] [ str "Keymapping" ]
         ul [] [
-          str "instructions "
           li [] [ str "keymapping 1" ]
           li [] [ str "keymapping 2" ]
         ]
+        p [] [ str "Text" ] 
         textarea [
                     ClassName "input"
                     DefaultValue model.Data.[model.Index].Text
-                    Size 200.0
+                    Size 100.0
                     Style [
                         Width "100%"
-                        Height "100px"
+                        Height "75px"
                     ] 
-                    OnInput (fun ev ->  UpdateInput (ev.target?value) |> dispatch )
+                    OnInput (fun ev ->  UpdateText (ev.target?value) |> dispatch )
+                ] []
+
+        p [] [ str "Text with numerics expanded to words" ] 
+        textarea [
+                    ClassName "input"
+                    DefaultValue model.Data.[model.Index].ExpandedText
+                    Size 100.0
+                    Style [
+                        Width "100%"
+                        Height "75px"
+                    ] 
+                    OnInput (fun ev ->  UpdateExpandedText (ev.target?value) |> dispatch )
                 ] []
         //simpleButton "Go" ProcessInput dispatch
         // hr []
