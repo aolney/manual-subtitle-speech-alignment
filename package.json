@@ -1,0 +1,57 @@
+{
+  "name": "manual-subtitle-speech-alignment",
+  "version": "1.0.0",
+  "description": "Manual Subtitle Speech Alignment",
+  "scripts": {
+    "start": "webpack-dev-server",
+    "publish": "gh-pages -d deploy",
+    "deploy": "webpack -p",
+    "node-build": "fable-splitter src -o node-build --commonjs",
+    "pretest": "fable-splitter tests -o test-build --commonjs",
+    "test": "mocha test-build -r jsdom-global/register -t 10000  --require tests/test-setup.js"
+  },
+  "keywords": [
+    "subtitle",
+    "speech",
+    "alignment",
+    "manual"
+  ],
+  "author": "Andrew M. Olney",
+  "license": "Apache-2.0",
+  "dependencies": {
+    "@babel/runtime-corejs2": "^7.0.0",
+    "@fortawesome/fontawesome-free": "^5.8.1",
+    "bulma": "^0.5.2",
+    "react": "^16.8.4",
+    "react-dom": "^16.8.4"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.3.4",
+    "@babel/plugin-transform-runtime": "^7.0.0",
+    "@babel/preset-env": "^7.0.0",
+    "babel-loader": "^8.0.6",
+    "copy-webpack-plugin": "^5.0.2",
+    "core-js": "^3.0.0",
+    "css-loader": "^2.1.1",
+    "fable-compiler": "^2.1.12",
+    "fable-loader": "^2.1.5",
+    "fable-splitter": "^2.1.5",
+    "gh-pages": "^2.0.1",
+    "html-webpack-plugin": "^3.2.0",
+    "isomorphic-fetch": "^2.2.1",
+    "jsdom-global": "^3.0.2",
+    "jsdom": "^15.1.0",
+    "loglevel": "^1.5.0",
+    "mini-css-extract-plugin": "^0.5.0",
+    "mocha": "^6.0.2",
+    "node-sass": "^4.12.0",
+    "raf-stub": "^2.0.2",
+    "remotedev": "^0.2.9",
+    "sass": "^1.20.1",
+    "sass-loader": "^6.0.6",
+    "style-loader": "^0.18.2",
+    "webpack": "^4.29.3",
+    "webpack-cli": "^3.2.3",
+    "webpack-dev-server": "^3.1.14"
+  }
+}

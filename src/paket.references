@@ -1,0 +1,13 @@
+FSharp.Core
+Fable.Core
+Fable.Elmish
+Fable.Elmish.React
+Fable.Elmish.Browser
+Fable.Elmish.Debugger
+Fable.Elmish.HMR
+Fable.React
+Fable.Promise
+Fable.Fetch
+Fulma
+Fable.FontAwesome.Free
+Thoth.Json

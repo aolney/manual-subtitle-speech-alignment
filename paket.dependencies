@@ -1,0 +1,17 @@
+source https://nuget.org/api/v2
+
+storage:none
+
+nuget Fable.Elmish.HMR >= 3.0
+nuget FSharp.Core >= 3.0
+nuget Fable.Core >= 3.0
+nuget Fable.Elmish.React >= 3.0
+nuget Fable.Elmish.Browser >= 3.0
+nuget Fable.Elmish.Debugger >= 3.0
+nuget Fable.React >= 4.0.0
+nuget Fable.Promise
+nuget Fable.Fetch
+nuget Fulma >= 1.0.0
+nuget Thoth.Json >= 2.1.0
+nuget Fable.FontAwesome.Free
+nuget Fable.Node
