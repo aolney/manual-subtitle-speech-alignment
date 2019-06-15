@@ -128,7 +128,7 @@ module.exports = {
     devServer: {
         publicPath: '/',
         contentBase: resolve(CONFIG.assetsDir),
-        host: '0.0.0.0',
+        //host: '0.0.0.0', //https://stackoverflow.com/questions/26276952/node-js-websocket-error-error-listen-eaddrnotavail-error-listen-eaddrnotavail/26277194#26277194
         port: CONFIG.devServerPort,
         proxy: CONFIG.devServerProxy,
         hot: true,
