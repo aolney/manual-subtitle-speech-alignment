@@ -9,18 +9,30 @@ type [<AllowNullLiteral>] WaveSurfer =
     abstract load: path: obj -> unit
     abstract loadBlob: blob: obj -> unit
     abstract play: start:float * stop:float -> unit
-    abstract on: label:string * callback: (unit -> unit) -> unit
+    abstract on: label:string * callback: (obj -> unit) -> unit
     abstract create: configuration: obj -> WaveSurfer
-    abstract getCurrentTime : unit -> unit
+    abstract getCurrentTime : unit -> float
+    abstract getDuration: unit -> float
+    abstract seekAndCenter: zeroToOne: float -> unit
+    abstract seekTo: zeroToOne: float -> unit
+    abstract skipBackward: seconds: float -> unit
+    abstract toggleScroll: unit -> unit
+    abstract zoom: pixelsPerSecond : int -> unit
+    abstract setHeight: pixels: int -> unit
+    //TODO not sure how to import region plugin; this is not working now
+//     abstract addRegion: options:obj -> obj
+//     abstract clearRegions: unit -> unit
     
-// and [<AllowNullLiteral>] WaveSurferStatic =
-//     [<Emit("WaveSurfer.create($0)")>] 
-//     abstract Create: configuration: obj -> WaveSurfer
-
-// //Link to JS
-// [<Import("*","wavesurfer")>]
-// let WaveSurfer : WaveSurferStatic = jsNative
+// type [<AllowNullLiteral>] Regions =
+//     abstract create: configuration: obj -> Regions
+//     abstract add: params: obj -> obj
+//     abstract init: wavesurfer: WaveSurfer -> unit
+//     abstract clear: params: unit -> unit
 
 //Link to JS
-[<Import("*","wavesurfer")>]
+[<Import("*","wavesurfer.js")>]
 let WaveSurfer : WaveSurfer = jsNative
+
+
+// [<Import("*","wavesurfer/plugin/wavesurfer.regions")>]
+// let Regions : Regions = jsNative
