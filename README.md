@@ -29,7 +29,7 @@ The input is required to be wav audio and json with the following format, where 
 ```
 A live demonstration [is available here.](https://olney.ai/manual-subtitle-speech-alignment)
 
-**TODO VIDEO DEMO**
+A video walk through [is available here.](https://www.youtube.com/watch?v=mB0pBMFo6Sk)
 
 ------------------------------
 
