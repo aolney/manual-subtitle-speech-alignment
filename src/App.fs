@@ -2,12 +2,11 @@ module App
 
 open Fable.Core
 open Fable.Core.JsInterop
-//open Fable.Import
-//open Fable.Import.Browser
+
 open Browser
 open Browser.Types
 open Browser.Url
-//open Browser.Dom
+
 open Elmish
 open Elmish.React
 open Fable.React
@@ -15,7 +14,6 @@ open Fable.React.Props
 open Elmish.Debug
 open Elmish.HMR
 open Thoth.Json
-// open System.IO
 
 open Fulma
 open Fable.FontAwesome
@@ -26,25 +24,20 @@ open System.IO
 open Fable.Import
 open System.Runtime.CompilerServices
 open Fable.React.ReactiveComponents
-// open System.UIntPtr
-
-//open Elmish.Browser.Navigation
-//open Elmish.Browser.UrlParser
-
-// importAll "../sass/main.sass"
+open Fable.Import
+open System.Text
 
 //Fable 2 transition
 let inline toJson x = Encode.Auto.toString(4, x)
 let inline ofJson<'T> json = Decode.Auto.unsafeFromString<'T>(json)
 
-// TESTS
-let randomFeature() = [1;2;3]
 
+// Todo: tests
+let randomFeature() = [1;2;3]
 
 // Domain
 // ---------------------------------------
-
-/// Rather specific to https://github.com/aolney/SouthParkTTSData , but could be modified without loss of generality
+/// Rather specific to https://github.com/aolney/SouthParkTTSData , but only Start/Stop/Text are required fields
 type Datum = 
   {
     Start : int
@@ -58,7 +51,26 @@ type Datum =
     EndAligned: bool
     SumAlignmentDiff: int
     ProportionAligned: float
+    Status : string //because this is not in our original data, we need a custom decoder with default value
   }
+  static member Decoder : Decoder<Datum> =
+      Decode.object
+          (fun get ->
+              {
+                Start = get.Required.Field "Start" Decode.int
+                Stop = get.Required.Field "Stop" Decode.int
+                Text = get.Required.Field "Text" Decode.string
+                //everything else is optional
+                ExpandedText = get.Optional.Field "ExpandedText" Decode.string |> Option.defaultValue ""
+                Id = get.Optional.Field "Id" Decode.string |> Option.defaultValue ""
+                WavFile = get.Optional.Field "WavFile" Decode.string |> Option.defaultValue ""
+                FrontAligned = get.Optional.Field "FrontAligned" Decode.bool |> Option.defaultValue false
+                EndAligned = get.Optional.Field "EndAligned" Decode.bool |> Option.defaultValue false
+                SumAlignmentDiff = get.Optional.Field "SumAlignmentDiff" Decode.int |> Option.defaultValue 0
+                ProportionAligned = get.Optional.Field "ProportionAligned" Decode.float |> Option.defaultValue 0.
+                Status = get.Optional.Field "Status" Decode.string |> Option.defaultValue ""
+              }
+          )
 
 type Mode = | TextEdit | Coding | Loading
 type Model = 
@@ -67,7 +79,7 @@ type Model =
     WavFile : Browser.Types.File option
     JsonFile : Browser.Types.File option
     Index : int
-    Data : Datum // Datum[]
+    Datum : Datum
   }
 
 type Msg =
@@ -75,14 +87,12 @@ type Msg =
     | UpdateExpandedText of string
     | UpdateWavFile of Browser.Types.FileList
     | UpdateJsonFile of Browser.Types.FileList
-    // | LoadFiles
+    | Download
     | DecodeJson of string
     | PlayWav
-    | PlayWavFinished
     | WaveSurferReady
     | UpdateStart of string
     | UpdateStop of string
-    // | KeyUp of float
     | KeyDown of float
 
 /// Mapped to functions for increased speed
@@ -102,6 +112,8 @@ module Keys =
     let [<Literal>] F = 70. //shift start later
     let [<Literal>] J = 74. //shift stop earlier
     let [<Literal>] K = 75. //shift stop later
+    //mark as good
+    let [<Literal>] G = 71.
     //keys for coding problems
     let [<Literal>] M = 77. //music
     let [<Literal>] N = 78. //noise
@@ -114,9 +126,6 @@ module Keys =
 let subscribeToKeyEvents dispatch =
     window.addEventListener("keydown", fun ev ->
         KeyDown (ev :?> KeyboardEvent).keyCode  |> dispatch )
-    // window.addEventListener("keyup", fun ev ->
-    //     KeyUp (ev :?> KeyboardEvent).keyCode  |> dispatch )
-
 
 let init () : Model * Cmd<Msg> =
   ( { 
@@ -124,7 +133,7 @@ let init () : Model * Cmd<Msg> =
       WavFile = None//"*.wav"
       JsonFile = None//"*.json"
       Index = 0; 
-      Data = //[|   
+      Datum =
         {
           Start= 0
           Stop= 0
@@ -136,162 +145,186 @@ let init () : Model * Cmd<Msg> =
           SumAlignmentDiff= 0
           ProportionAligned= 0.
           ExpandedText= ""
+          Status = ""
         }
-      //|] 
     }, [subscribeToKeyEvents] )
 
 //Globals
-// We have html elements in index.html to avoid handling them through react
-
-//React not responding to changes in array when in model, also copying so much data is slow
-let mutable data = Array.empty<Datum>
-
+// wavesurfer container is in html to avoid handling it through react; we programmatically initialize here
 let wavesurfer = 
   WaveSurfer.create(
      createObj [
       "container" ==> "#waveform"
       "waveColor" ==> "violet"
       "progressColor" ==> "purple"
+      "barHeight" ==> 10
+      "minPxPerSec" ==> 200
+      "forceDecode" ==> true
+      "scrollParent" ==> true
+    //  This fails unexpectedly, so we use alternative API when wavesurfer fires ready
     //   "plugins" ==> [
-    //     WaveSurfer.Regions.create( createObj[] )
+    //     RegionsPlugin.create(  )
     // ]
   ]
 )
 
+// Only keeping datum being edited in model at one time; copying all data is slow
+let mutable data = Array.empty<Datum>
+
+//This could be in model if we made it a user option
+let timeIncrement = 10 //milliseconds
+
 // Update
 // ---------------------------------------
-// wavesurfer.on("ready", fun _ -> 
-//   // wavesurfer.setHeight(500)
-//   // RegionsPlugin.init(wavesurfer)
-//   wavesurfer.zoom(300) 
-//   Browser.Dom.console.log( "wavesurfer ready" )
-//   )
-// loads much faster than graphic appears
-wavesurfer.on("loading", fun percent -> 
-  Browser.Dom.console.log( percent )
-)
-
 let seekWavesurfer( desiredMilliseconds: int ) =
    wavesurfer.seekTo( float(desiredMilliseconds) / 1000.0 / wavesurfer.getDuration() );
 
 let seekCenterWavesurfer( desiredMilliseconds: int ) =
    wavesurfer.seekAndCenter( float(desiredMilliseconds) / 1000.0 / wavesurfer.getDuration() );
 
-// let addWavesurferRegion(startMillseconds : int) (stopMilliseconds: int) =
-//   wavesurfer.addRegion(
-//     createObj [
-//       "start" ==> float(startMillseconds) / 1000.0
-//       "end" ==> float(stopMilliseconds) / 1000.0
-//     ]
-//   )
+let updateWavesurferRegion( datum: Datum ) =
+  wavesurfer.clearRegions()
+  wavesurfer.addRegion(
+    createObj [
+      "start" ==> float(datum.Start) / 1000.0
+      "end" ==> float(datum.Stop) / 1000.0
+      "color" ==>  "rgba(0, 0, 0, 0.3)" 
+    ]
+  ) |> ignore //returns the region, but we ignore it
+
+let boundedTimeShift newTime =
+  if newTime < 0 then
+    0
+  else if newTime > int(wavesurfer.getDuration() * 1000.0) then
+    int(wavesurfer.getDuration() * 1000.0)
+  else
+    newTime
+
 let update msg (model:Model) =
   match msg with
+
   | UpdateText(input) ->
-
-    //react not firing with this?
-    // model.Data.[model.Index] <- { model.Data.[model.Index] with Text = input}
     ( model, [])
+
   | UpdateExpandedText(input) ->
-
-    //react not firing with this?
-    // model.Data.[model.Index] <- { model.Data.[model.Index] with ExpandedText = input}
     ( model, [])
+
   | UpdateWavFile(input) -> 
     let wavesurferLoadCommand dispatch =
         wavesurfer.on("ready", fun _ -> WaveSurferReady |> dispatch )
     wavesurfer.loadBlob( input.[0] )
     ( {model with WavFile = Some(input.[0]); Mode=Loading}, [wavesurferLoadCommand])
+
   | UpdateJsonFile(input) -> 
     let fileReadCommand dispatch =
       let fileReader = Browser.Dom.FileReader.Create ()
       fileReader.onload <- fun _ -> fileReader.result |> unbox<string> |> DecodeJson |> dispatch
       fileReader.readAsText input.[0]
     ( {model with JsonFile = Some(input.[0])}, [fileReadCommand] )
-  //TODO: this is now redundant if we prefer loading when the file is selected
-  // | LoadFiles ->
-  //   match model.WavFile, model.JsonFile with
-  //   | Some(wavFile),Some(jsonFile) -> 
-  //     //let wavUrl = URL.createObjectURL(wavFile)
-  //     wavesurfer.loadBlob( wavFile )
-  //     let wavesurferLoadCommand dispatch =
-  //       wavesurfer.on("ready", fun _ -> WaveSurferReady |> dispatch )
-  //     //let jsonUrl = URL.createObjectURL(jsonFile)
-  //     let fileReadCommand dispatch =
-  //       let fileReader = Browser.Dom.FileReader.Create ()
-  //       fileReader.onload <- fun _ -> fileReader.result |> unbox<string> |> DecodeJson |> dispatch
-  //       fileReader.readAsText jsonFile
-  //     ( model, [fileReadCommand;wavesurferLoadCommand])
-  //   | _,_ -> ( model, [])
+    
   | DecodeJson(input) ->
-    //let data = input |> ofJson<Datum[]> 
-    //data now global
-    data <- input |> ofJson<Datum[]> 
-    ( {model with Index=0; Data=data.[0] }, [])
+    data <- input |> Decode.unsafeFromString ( Thoth.Json.Decode.array Datum.Decoder ) 
+    ( {model with Index=0; Datum=data.[0] }, [])
+
   | WaveSurferReady -> 
-    // wavesurfer.on("ready", fun _ -> 
-    // wavesurfer.setHeight(500)
-    // RegionsPlugin.init(wavesurfer)}}
-    wavesurfer.zoom(300) 
-    // Browser.Dom.console.log( "wavesurfer ready" )
+    wavesurfer.addPlugin( RegionsPlugin.create() ) |> ignore
+    wavesurfer.initPlugin( "regions" ) |> ignore
     ( {model with Mode=Coding}, [])
+
   | PlayWav ->
-    // wavesurfer.zoom(100)
-    wavesurfer.play ( float(model.Data.Start) / 1000.0 , float(model.Data.Stop) / 1000.0 )
-    let postPlayCommand dispatch = wavesurfer.on("pause", fun _ -> 
-      Browser.Dom.console.log( "play finished" )
-      PlayWavFinished |> dispatch )
-    ( model, [postPlayCommand])
-  | PlayWavFinished ->
-    seekWavesurfer( model.Data.Start )
-    // wavesurfer.skipBackward( float(model.Data.Stop - model.Data.Start)/1000.0 )
+    wavesurfer.play ( float(model.Datum.Start) / 1000.0 , float(model.Datum.Stop) / 1000.0 )
     ( model, [])
+
   | UpdateStart(input) ->
-    let data = { model.Data with Start=System.Int32.Parse(input) }
-    ( {model with Data=data }, [])
+    let data = { model.Datum with Start=System.Int32.Parse(input) }
+    ( {model with Datum=data }, [])
+
   | UpdateStop(input) ->
-    let data = { model.Data with Stop=System.Int32.Parse(input) }
-    ( {model with Data=data }, [])
-  // | KeyUp code ->
-  //   match code with
-  //   | Keys.Left -> model,[]
-  //   | _ -> model,[]
+    let data = { model.Datum with Stop=System.Int32.Parse(input) }
+    ( {model with Datum=data }, [])
+
   | KeyDown code ->
     match code, model.Mode with
+    //Switch modes
     | Keys.Escape,_ -> 
       match model.Mode with
       | Coding -> { model with Mode=TextEdit},[]
       | TextEdit -> { model with Mode=Coding},[]
       | _ -> (model,[])
+    //Play wav clip
     | Keys.P, Coding ->
-      //wavesurfer.zoom(300)
-      //seekWavesurfer( data.[model.Index + 1].Start )
-      // wavesurfer.toggleScroll()
-      // seekWavesurfer( model.Data.Start )
-      wavesurfer.play ( float(model.Data.Start) / 1000.0 , float(model.Data.Stop) / 1000.0 )
+      wavesurfer.play ( float(model.Datum.Start) / 1000.0 , float(model.Datum.Stop) / 1000.0 )
       model,[]
+    //Shift start earlier
+    | Keys.D, Coding ->
+      let newDatum = { model.Datum with Start = boundedTimeShift(model.Datum.Start - timeIncrement)  }
+      updateWavesurferRegion newDatum
+      { model with Datum = newDatum },[]
+    //Shift start later
+    | Keys.F, Coding ->
+      let newDatum = { model.Datum with Start = boundedTimeShift(model.Datum.Start + timeIncrement)  }
+      updateWavesurferRegion newDatum
+      { model with Datum = newDatum },[]
+    //Shift stop earlier
+    | Keys.J, Coding ->
+      let newDatum = { model.Datum with Stop = boundedTimeShift(model.Datum.Stop - timeIncrement)  }
+      updateWavesurferRegion newDatum
+      { model with Datum = newDatum },[]
+    //Shift stop later
+    | Keys.K, Coding ->
+      let newDatum = { model.Datum with Stop = boundedTimeShift(model.Datum.Stop + timeIncrement)  }
+      updateWavesurferRegion newDatum
+      { model with Datum = newDatum },[]
+    //Coding status good
+    | Keys.G, Coding -> { model with Datum = {model.Datum with Status = "good" }} ,[]
+    //Coding status problem: music
+    | Keys.M, Coding -> { model with Datum = {model.Datum with Status = "music" }} ,[]
+    //Coding status problem: noise
+    | Keys.N, Coding -> { model with  Datum = {model.Datum with Status = "noise" }},[]
+    //Coding status problem: overlapping speech
+    | Keys.O, Coding -> { model with  Datum = {model.Datum with Status = "overlapping speech" }},[]
+    //Coding status problem: wrong character
+    | Keys.W, Coding -> { model with  Datum = {model.Datum with Status = "wrong character" }},[]
+    //Coding status problem: x-factor
+    | Keys.X, Coding -> { model with  Datum = {model.Datum with Status = "other" }},[]        
     | Keys.Up,_ -> 
+      data.[model.Index] <- model.Datum //automatically save current datum to global
       let newModel =
         if model.Index > 0 then
-          // wavesurfer.clearRegions()
-          let nextDatum = data.[model.Index - 1]
-          // addWavesurferRegion nextDatum.Start nextDatum.Stop |> ignore
-          seekCenterWavesurfer( nextDatum.Start )
-          { model with Index = model.Index - 1; Data = nextDatum }
+          let newDatum = data.[model.Index - 1]
+          updateWavesurferRegion newDatum
+          seekCenterWavesurfer( newDatum.Start )
+          { model with Index = model.Index - 1; Datum = newDatum }
         else
           model
       ( newModel,[] )
-    | Keys.Down,_ -> 
+    | Keys.Down,_ 
+    | Keys.Enter,_ -> 
+      data.[model.Index] <- model.Datum //automatically save current datum to global
       let newModel =
         if model.Index < data.Length - 1 then
-          // wavesurfer.clearRegions()
-          let nextDatum = data.[model.Index + 1]
-          // addWavesurferRegion nextDatum.Start nextDatum.Stop |> ignore
-          seekCenterWavesurfer( nextDatum.Start )
-          { model with Index = model.Index + 1; Data = nextDatum }
+          let newDatum = data.[model.Index + 1]
+          updateWavesurferRegion newDatum
+          seekCenterWavesurfer( newDatum.Start )
+          { model with Index = model.Index + 1; Datum = newDatum }
         else
           model
       ( newModel,[] )
     | _ -> model,[]
+
+  | Download ->
+      let a = document.createElement("a") :?> Browser.Types.HTMLLinkElement
+      //May need blobs for larger sizes
+      //a.href <- URL.createObjectURL( blob );
+      a.href <- "data:text/plain;charset=utf-8," + JS.encodeURIComponent( data |> toJson )
+      let filename = 
+        match  model.JsonFile with
+        | Some(file) -> file.name + ".corrected"
+        | None -> "empty"
+      a.setAttribute("download", filename );
+      a.click()
+      ( model,[] )
+  
 
 // View
 // ---------------------------------------
@@ -304,16 +337,10 @@ let simpleButton txt action dispatch =
     [ str txt ] ]
 
 let view model dispatch =
-  // div [ ClassName "columns is-vcentered" ] [ 
-  //   div [ ClassName "column" ] [ 
   Section.section [] [
     //spinner defined in sass
-    // div [ ClassName "loading"; Hidden ( match model.Mode with | Loading -> true | _ -> false )  ] []
     div [ ClassName "loading"; Hidden ( model.Mode = Mode.Coding || model.Mode = Mode.TextEdit )  ] []
-    //div [ ClassName "loading"; Hidden true  ] []
     Container.container [ Container.IsFluid ] [
-      // Section.section [] [
-        //h1 [ ClassName "title"] [ str "Manual Subtitle Speech Alignment"]
       Heading.h2 [ ] [ str "Manual Subtitle Speech Alignment"]
       Content.content [ ] [
         p [] [ str "Load and correct one wav file's worth of speech alignment data at a time. Click on the cat in the corner for more information." ]
@@ -377,7 +404,7 @@ let view model dispatch =
             Input.text [
                   Input.Color IsPrimary
                   Input.IsRounded
-                  Input.Value ( model.Data.Start.ToString() )
+                  Input.Value ( model.Datum.Start.ToString() )
                   Input.Props [ OnChange (fun ev ->  !!ev.target?value |> UpdateStart|> dispatch ) ]
                 ]
           ]
@@ -387,8 +414,7 @@ let view model dispatch =
           str "Text"
           textarea [
             ClassName "input"
-            // DefaultValue model.Data.[model.Index].Text
-            Value model.Data.Text
+            Value model.Datum.Text
             Size 100.0
             Style [
                 Width "100%"
@@ -400,8 +426,7 @@ let view model dispatch =
           str "Text with numerics expanded to words" 
           textarea [
             ClassName "input"
-            // DefaultValue model.Data.[model.Index].ExpandedText
-            Value model.Data.ExpandedText
+            Value model.Datum.ExpandedText
             Size 100.0
             Style [
                 Width "100%"
@@ -416,45 +441,77 @@ let view model dispatch =
             Input.text [
               Input.Color IsPrimary
               Input.IsRounded
-              Input.Value ( model.Data.Stop.ToString() )
+              Input.Value ( model.Datum.Stop.ToString() )
               Input.Props [ OnChange (fun ev ->  !!ev.target?value |> UpdateStop|> dispatch ) ]
             ]
           ]
         ]
       ]
-           //landing place for now
-      // Container.container [] [
-      // Button.button [ 
-      //   Button.Color IsPrimary
-      //   Button.OnClick (fun _ -> dispatch LoadFiles)
-      //   ] [ str "Load Files" ]
-      // Button.button [ 
-      //   Button.Color IsGreyLight
-      //   Button.OnClick (fun _ -> dispatch PlayWav)
-      //   ] [ str "Play Wav" ]
-      // Button.button [ 
-      //   Button.Color IsBlack
-      //   Button.OnClick (fun _ -> Browser.Dom.console.log( wavesurfer.getCurrentTime() ) )
-      //   ] [ str "Get time" ]
-      //Browser.Dom.console.log( wavesurfer.getCurrentTime() )
-      // h2 [] [ str "Keymapping" ]
-      // ul [] [
-      //   li [] [ str "keymapping 1" ]
-      //   li [] [ str "keymapping 2" ]
-      // ]
-      // ]
-      //debuggy but also generally useful
-      pre [  Style [FontSize 10.0 ] ] [ str (model.Data |> toJson) ]
+
+      Fulma.Columns.columns [ Columns.IsCentered ] [
+        Fulma.Column.column [ Column.Width (Screen.All, Column.IsNarrow) ] [
+          //debuggy but also generally useful
+          pre [  Style [FontSize 10.0 ] ] [ str (model.Datum |> toJson) ]
+        ]
+        Fulma.Column.column [ Column.Width (Screen.All, Column.IsNarrow) ] [
+          Button.button [ 
+            Button.Color IsPrimary
+            Button.OnClick (fun _ -> dispatch Download )
+            ] [ str "Get Results" ]
+        ]
+        Fulma.Column.column [ Column.Width (Screen.All, Column.IsNarrow) ] [
+          Dropdown.dropdown [ Dropdown.IsHoverable ]
+            [ div [ ]
+                [ Button.button [ ]
+                    [ span [ ]
+                        [ str "Key Command Menu" ]
+                      Icon.icon [ Icon.Size IsSmall ]
+                        [ Fa.i [ Fa.Solid.AngleDown ]
+                            [ ] ] ] ]
+              Dropdown.menu [ ]
+                [ Dropdown.content [ ]
+                    [ Dropdown.Item.a [ ]
+                        [ str "Esc -> Change mode" ]
+                      Dropdown.Item.a [ ]
+                        [ str "Up Arrow -> Previous datum" ]
+                      Dropdown.Item.a [ ]
+                        [ str "Down Arrow -> Next datum" ]
+                      Dropdown.Item.a [ ]
+                        [ str "Enter -> Next datum" ]
+                      Dropdown.Item.a [ ]
+                        [ str "D -> Shift start earlier" ] 
+                      Dropdown.Item.a [ ]
+                        [ str "F -> Shift start later" ] 
+                      Dropdown.Item.a [ ]
+                        [ str "J -> Shift stop earlier" ] 
+                      Dropdown.Item.a [ ]
+                        [ str "K -> Shift stop later" ] 
+                      Dropdown.Item.a [ ]
+                        [ str "P -> Play datum audio" ] 
+                      Dropdown.Item.a [ ]
+                        [ str "G -> Status good" ] 
+                      Dropdown.Item.a [ ]
+                        [ str "M -> Status music problem" ] 
+                      Dropdown.Item.a [ ]
+                        [ str "N -> Status noise problem" ] 
+                      Dropdown.Item.a [ ]
+                        [ str "O -> Status overlapping speech" ] 
+                      Dropdown.Item.a [ ]
+                        [ str "W -> Status wrong character" ]  
+                      Dropdown.Item.a [ ]
+                        [ str "X -> Status bad other" ]                                                                                                                                                                                                                         
+                        ] ] ]
+        ]
+      ]
     ]  
   ]
 
 // App
 Program.mkProgram init update view
-//|> Program.toNavigable (parseHash pageParser) urlUpdate
 #if DEBUG
 |> Program.withDebugger
 |> Program.withConsoleTrace
-//|> Program.withHMR
+//|> Program.withHMR //deprecated???
 #endif
 |> Program.withReactBatched "elmish-app" 
 |> Program.run

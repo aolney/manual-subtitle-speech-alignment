@@ -6,6 +6,12 @@ open Fable.Core
 open App
 open Node
 
+/////////////////////////////////////////////////////////////
+/// 
+/// TODO: THIS IS TEMPLATE FROM ANOTHER PROJECT AND NOT FUNCTIONAL
+/// 
+/// //////////////////////////////////////////////////////////
+
 let inline equal (expected: 'T) (actual: 'T): unit =
     Testing.Assert.AreEqual(expected, actual)
 

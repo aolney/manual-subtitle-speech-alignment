@@ -17,7 +17,19 @@ However, unlike that work, we:
 - Allow rejection of utterances entirely, with rejection codes
 - Support a keyboard-oriented UI for faster review/correction
 
-A live demonstration is available at **TODO**
+The input is required to be wav audio and json with the following format, where the times are in milliseconds:
+``` javascript
+[
+  {
+    "Start": 184170,
+    "Stop": 184284,
+    "Text": "YES, HE CAN!"
+  }
+]
+```
+A live demonstration [is available here.](https://olney.ai/manual-subtitle-speech-alignment)
+
+**TODO VIDEO DEMO**
 
 ------------------------------
 
