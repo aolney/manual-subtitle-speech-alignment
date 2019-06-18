@@ -7,15 +7,16 @@ Some of the data produced by the aforementioned work suffers from the following 
 - Music/noise in the background
 - Overlapping speech
 - Clipped final word (e.g. ~100ms)
-- Preceeding/following silence (rare)
+- Preceeding/following silence
 - Wrong speaker (rare)
 
-To resolve these, we create a UI with data preview/edit capabilities, similar to [finetuneas](https://github.com/ozdefir/finetuneas).
-However, unlike that work, we:
+To resolve these, I created a UI with data preview/edit capabilities, similar to [finetuneas](https://github.com/ozdefir/finetuneas).
+However, unlike that work, my program:
 
-- Allow editing the transcript (i.e., we do not assume it is correct)
-- Allow rejection of utterances entirely, with rejection codes
-- Support a keyboard-oriented UI for faster review/correction
+- Allows editing the transcript (i.e., we do not assume it is correct)
+- Allows rejection of utterances entirely, with rejection codes
+- Supports a keyboard-oriented UI for faster review/correction
+- Displays a waveform
 
 The input is required to be wav audio and json with the following format, where the times are in milliseconds:
 ``` javascript
@@ -27,9 +28,11 @@ The input is required to be wav audio and json with the following format, where 
   }
 ]
 ```
-A live demonstration [is available here.](https://olney.ai/manual-subtitle-speech-alignment)
+The program [is available here](https://olney.ai/manual-subtitle-speech-alignment). It is all client-side, so there's no need to install it yourself.
 
 A video walk through [is available here.](https://www.youtube.com/watch?v=mB0pBMFo6Sk)
+
+PRs welcome
 
 ------------------------------
 

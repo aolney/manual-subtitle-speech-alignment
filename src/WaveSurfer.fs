@@ -9,6 +9,9 @@ type [<AllowNullLiteral>] WaveSurfer =
     abstract load: path: obj -> unit
     abstract loadBlob: blob: obj -> unit
     abstract play: start:float * stop:float -> unit
+    abstract pause: unit -> unit
+    abstract stop: unit -> unit
+    abstract isPlaying: unit -> bool
     abstract on: label:string * callback: (obj -> unit) -> unit
     abstract create: configuration: obj -> WaveSurfer
     abstract setCurrentTime : float -> unit

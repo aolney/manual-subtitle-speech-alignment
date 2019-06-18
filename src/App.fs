@@ -126,7 +126,7 @@ module Keys =
 let subscribeToKeyEvents dispatch =
     window.addEventListener("keydown", fun ev ->
         KeyDown (ev :?> KeyboardEvent).keyCode  |> dispatch )
-
+        
 let init () : Model * Cmd<Msg> =
   ( { 
       Mode = Coding
@@ -158,7 +158,7 @@ let wavesurfer =
       "waveColor" ==> "violet"
       "progressColor" ==> "purple"
       "barHeight" ==> 10
-      "minPxPerSec" ==> 200
+      "minPxPerSec" ==> 400
       "forceDecode" ==> true
       "scrollParent" ==> true
     //  This fails unexpectedly, so we use alternative API when wavesurfer fires ready
@@ -204,12 +204,21 @@ let update msg (model:Model) =
   match msg with
 
   | UpdateText(input) ->
-    ( model, [])
+    if model.Mode = TextEdit then
+      let datum = { model.Datum with Text = input }
+      ( {model with Datum=datum}, [])
+    else
+      ( model, [] )
 
   | UpdateExpandedText(input) ->
-    ( model, [])
+    if model.Mode = TextEdit then
+      let datum = { model.Datum with ExpandedText = input }
+      ( {model with Datum=datum}, [])
+    else
+      ( model, [])
 
   | UpdateWavFile(input) -> 
+    (document.activeElement :?> HTMLElement).blur() //prevent "enter" from relaunching dialog
     let wavesurferLoadCommand dispatch =
         wavesurfer.on("ready", fun _ -> WaveSurferReady |> dispatch )
     wavesurfer.loadBlob( input.[0] )
@@ -223,7 +232,18 @@ let update msg (model:Model) =
     ( {model with JsonFile = Some(input.[0])}, [fileReadCommand] )
     
   | DecodeJson(input) ->
-    data <- input |> Decode.unsafeFromString ( Thoth.Json.Decode.array Datum.Decoder ) 
+    (document.activeElement :?> HTMLElement).blur() //prevent "enter" from relaunching dialog
+    data <- 
+      input 
+      |> Decode.unsafeFromString ( Thoth.Json.Decode.array Datum.Decoder ) 
+      //deal with bad data; here just invalid start/stop times
+      |> Array.map( fun d -> 
+        if d.Start > d.Stop then 
+          let center = (d.Start + d.Stop) / 2
+          { d with Start = center - 2000; Stop = center + 2000}
+        else
+          d
+        )
     ( {model with Index=0; Datum=data.[0] }, [])
 
   | WaveSurferReady -> 
@@ -236,17 +256,18 @@ let update msg (model:Model) =
     ( model, [])
 
   | UpdateStart(input) ->
-    let data = { model.Datum with Start=System.Int32.Parse(input) }
-    ( {model with Datum=data }, [])
+    let datum = { model.Datum with Start=System.Int32.Parse(input) }
+    ( {model with Datum=datum }, [])
 
   | UpdateStop(input) ->
-    let data = { model.Datum with Stop=System.Int32.Parse(input) }
-    ( {model with Datum=data }, [])
+    let datum = { model.Datum with Stop=System.Int32.Parse(input) }
+    ( {model with Datum=datum }, [])
 
   | KeyDown code ->
     match code, model.Mode with
     //Switch modes
     | Keys.Escape,_ -> 
+      (document.activeElement :?> HTMLElement).blur() //clear focus
       match model.Mode with
       | Coding -> { model with Mode=TextEdit},[]
       | TextEdit -> { model with Mode=Coding},[]
@@ -257,24 +278,24 @@ let update msg (model:Model) =
       model,[]
     //Shift start earlier
     | Keys.D, Coding ->
-      let newDatum = { model.Datum with Start = boundedTimeShift(model.Datum.Start - timeIncrement)  }
-      updateWavesurferRegion newDatum
-      { model with Datum = newDatum },[]
+      let datum = { model.Datum with Start = boundedTimeShift(model.Datum.Start - timeIncrement)  }
+      updateWavesurferRegion datum
+      { model with Datum = datum },[]
     //Shift start later
     | Keys.F, Coding ->
-      let newDatum = { model.Datum with Start = boundedTimeShift(model.Datum.Start + timeIncrement)  }
-      updateWavesurferRegion newDatum
-      { model with Datum = newDatum },[]
+      let datum = { model.Datum with Start = boundedTimeShift(model.Datum.Start + timeIncrement)  }
+      updateWavesurferRegion datum
+      { model with Datum = datum },[]
     //Shift stop earlier
     | Keys.J, Coding ->
-      let newDatum = { model.Datum with Stop = boundedTimeShift(model.Datum.Stop - timeIncrement)  }
-      updateWavesurferRegion newDatum
-      { model with Datum = newDatum },[]
+      let datum = { model.Datum with Stop = boundedTimeShift(model.Datum.Stop - timeIncrement)  }
+      updateWavesurferRegion datum
+      { model with Datum = datum },[]
     //Shift stop later
     | Keys.K, Coding ->
-      let newDatum = { model.Datum with Stop = boundedTimeShift(model.Datum.Stop + timeIncrement)  }
-      updateWavesurferRegion newDatum
-      { model with Datum = newDatum },[]
+      let datum = { model.Datum with Stop = boundedTimeShift(model.Datum.Stop + timeIncrement)  }
+      updateWavesurferRegion datum
+      { model with Datum = datum },[]
     //Coding status good
     | Keys.G, Coding -> { model with Datum = {model.Datum with Status = "good" }} ,[]
     //Coding status problem: music
@@ -287,30 +308,32 @@ let update msg (model:Model) =
     | Keys.W, Coding -> { model with  Datum = {model.Datum with Status = "wrong character" }},[]
     //Coding status problem: x-factor
     | Keys.X, Coding -> { model with  Datum = {model.Datum with Status = "other" }},[]        
-    | Keys.Up,_ -> 
+    | Keys.Up,Coding -> 
       data.[model.Index] <- model.Datum //automatically save current datum to global
       let newModel =
         if model.Index > 0 then
-          let newDatum = data.[model.Index - 1]
-          updateWavesurferRegion newDatum
-          seekCenterWavesurfer( newDatum.Start )
-          { model with Index = model.Index - 1; Datum = newDatum }
+          let datum = data.[model.Index - 1]
+          updateWavesurferRegion datum
+          seekCenterWavesurfer( datum.Start )
+          { model with Index = model.Index - 1; Datum = datum }
         else
           model
       ( newModel,[] )
-    | Keys.Down,_ 
-    | Keys.Enter,_ -> 
+    | Keys.Down,Coding 
+    | Keys.Enter,Coding -> 
+      if wavesurfer.isPlaying() then wavesurfer.pause()
       data.[model.Index] <- model.Datum //automatically save current datum to global
       let newModel =
         if model.Index < data.Length - 1 then
-          let newDatum = data.[model.Index + 1]
-          updateWavesurferRegion newDatum
-          seekCenterWavesurfer( newDatum.Start )
-          { model with Index = model.Index + 1; Datum = newDatum }
+          let datum = data.[model.Index + 1]
+          updateWavesurferRegion datum
+          seekCenterWavesurfer( datum.Start )
+          { model with Index = model.Index + 1; Datum = datum }
         else
           model
       ( newModel,[] )
-    | _ -> model,[]
+    //For all other key commands we do nothing
+    | _,_ -> model,[]
 
   | Download ->
       let a = document.createElement("a") :?> Browser.Types.HTMLLinkElement
@@ -325,7 +348,6 @@ let update msg (model:Model) =
       a.click()
       ( model,[] )
   
-
 // View
 // ---------------------------------------
 let simpleButton txt action dispatch =
@@ -513,5 +535,5 @@ Program.mkProgram init update view
 |> Program.withConsoleTrace
 //|> Program.withHMR //deprecated???
 #endif
-|> Program.withReactBatched "elmish-app" 
+|> Program.withReactSynchronous "elmish-app" //batched makes input cursor jump to end of box
 |> Program.run
