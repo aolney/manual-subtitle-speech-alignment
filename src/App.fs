@@ -103,6 +103,7 @@ module Keys =
     let [<Literal>] Alt = 18.
     //use as a mode shift 
     let [<Literal>] Escape = 27.
+    let [<Literal>] Space = 32.
     let [<Literal>] Left = 37.
     let [<Literal>] Up = 38. //go to previous datum
     let [<Literal>] Right = 39.
@@ -273,7 +274,8 @@ let update msg (model:Model) =
       | TextEdit -> { model with Mode=Coding},[]
       | _ -> (model,[])
     //Play wav clip
-    | Keys.P, Coding ->
+    | Keys.P, Coding 
+    | Keys.Space, Coding ->
       wavesurfer.play ( float(model.Datum.Start) / 1000.0 , float(model.Datum.Stop) / 1000.0 )
       model,[]
     //Shift start earlier
@@ -509,7 +511,7 @@ let view model dispatch =
                       Dropdown.Item.a [ ]
                         [ str "K -> Shift stop later" ] 
                       Dropdown.Item.a [ ]
-                        [ str "P -> Play datum audio" ] 
+                        [ str "P or Space -> Play datum audio" ] 
                       Dropdown.Item.a [ ]
                         [ str "G -> Status good" ] 
                       Dropdown.Item.a [ ]
