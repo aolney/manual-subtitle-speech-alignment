@@ -32,7 +32,7 @@ The program [is available here](https://olney.ai/manual-subtitle-speech-alignmen
 
 A video walk through [is available here.](https://www.youtube.com/watch?v=mB0pBMFo6Sk)
 
-PRs welcome
+PRs welcome.
 
 ------------------------------
 

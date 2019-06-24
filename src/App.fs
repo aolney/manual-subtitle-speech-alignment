@@ -26,6 +26,7 @@ open System.Runtime.CompilerServices
 open Fable.React.ReactiveComponents
 open Fable.Import
 open System.Text
+open System
 
 //Fable 2 transition
 let inline toJson x = Encode.Auto.toString(4, x)
@@ -95,19 +96,19 @@ type Msg =
     | UpdateStop of string
     | KeyDown of float
 
-/// Mapped to functions for increased speed
+/// Mapped to functions for increased speed; some of these aren't used
 module Keys =
     let [<Literal>] Tab = 9.
     let [<Literal>] Enter = 13. //go to next datum
     let [<Literal>] Ctrl = 17.
     let [<Literal>] Alt = 18.
-    //use as a mode shift 
-    let [<Literal>] Escape = 27.
-    let [<Literal>] Space = 32.
+    let [<Literal>] Escape = 27. //use as mode shift
+    let [<Literal>] Space = 32. //also play wav file
     let [<Literal>] Left = 37.
     let [<Literal>] Up = 38. //go to previous datum
     let [<Literal>] Right = 39.
     let [<Literal>] Down = 40. //go to next datum
+    let [<Literal>] C = 67. //make a copy (for splitting a record)
     //keys for adjusting times
     let [<Literal>] D = 68. //shift start earlier
     let [<Literal>] F = 70. //shift start later
@@ -170,7 +171,7 @@ let wavesurfer =
 )
 
 // Only keeping datum being edited in model at one time; copying all data is slow
-let mutable data = Array.empty<Datum>
+let data = ResizeArray<Datum>()
 
 //This could be in model if we made it a user option
 let timeIncrement = 10 //milliseconds
@@ -200,6 +201,29 @@ let boundedTimeShift newTime =
     int(wavesurfer.getDuration() * 1000.0)
   else
     newTime
+
+let nextValidDatumIndex startIndex step =
+  let mutable index = startIndex + step
+  let mutable notFound = true
+  while notFound do
+    //out of bounds set to 0 (even if 0 is filtered)
+    if index < 0 then
+      index <- 0
+      notFound <- false
+    //out of bounds set to max (even if max is filtered)
+    else if 
+      index >= data.Count then
+      index <- data.Count - 1
+      notFound <- false
+    //in bounds, filtered, advance
+    else if
+      data.[index].Status = "automaticallyfiltered" then
+      index <- index + step
+    //in bounds, regular, stop
+    else
+      notFound <- false
+  //
+  index
 
 let update msg (model:Model) =
   match msg with
@@ -234,18 +258,20 @@ let update msg (model:Model) =
     
   | DecodeJson(input) ->
     (document.activeElement :?> HTMLElement).blur() //prevent "enter" from relaunching dialog
-    data <- 
-      input 
-      |> Decode.unsafeFromString ( Thoth.Json.Decode.array Datum.Decoder ) 
-      //deal with bad data; here just invalid start/stop times
-      |> Array.map( fun d -> 
-        if d.Start > d.Stop then 
-          let center = (d.Start + d.Stop) / 2
-          { d with Start = center - 2000; Stop = center + 2000}
-        else
-          d
-        )
-    ( {model with Index=0; Datum=data.[0] }, [])
+    data.Clear()
+    data.AddRange(
+        input 
+        |> Decode.unsafeFromString ( Thoth.Json.Decode.array Datum.Decoder ) 
+        //deal with bad data; here just invalid start/stop times
+        |> Array.map( fun d -> 
+          if d.Start > d.Stop then 
+            let center = (d.Start + d.Stop) / 2
+            { d with Start = center - 2000; Stop = center + 2000}
+          else
+            d
+        )) |> ignore
+    let index = nextValidDatumIndex 0 1
+    ( {model with Index=index; Datum=data.[index] }, [])
 
   | WaveSurferReady -> 
     wavesurfer.addPlugin( RegionsPlugin.create() ) |> ignore
@@ -278,6 +304,13 @@ let update msg (model:Model) =
     | Keys.Space, Coding ->
       wavesurfer.play ( float(model.Datum.Start) / 1000.0 , float(model.Datum.Stop) / 1000.0 )
       model,[]
+    //Make a copy of this record and insert in place
+    | Keys.C, Coding ->
+      //duplicate with a unique but derivative id, insert in data, update model
+      let newId = model.Datum.Id + "-" + System.DateTime.Now.ToString("yyyyMMddHHmmss")
+      let datum = {model.Datum with Id=newId}
+      data.Insert(model.Index,datum)
+      { model with Datum = datum },[]
     //Shift start earlier
     | Keys.D, Coding ->
       let datum = { model.Datum with Start = boundedTimeShift(model.Datum.Start - timeIncrement)  }
@@ -312,28 +345,20 @@ let update msg (model:Model) =
     | Keys.X, Coding -> { model with  Datum = {model.Datum with Status = "other" }},[]        
     | Keys.Up,Coding -> 
       data.[model.Index] <- model.Datum //automatically save current datum to global
-      let newModel =
-        if model.Index > 0 then
-          let datum = data.[model.Index - 1]
-          updateWavesurferRegion datum
-          seekCenterWavesurfer( datum.Start )
-          { model with Index = model.Index - 1; Datum = datum }
-        else
-          model
-      ( newModel,[] )
+      let index = nextValidDatumIndex model.Index -1
+      let datum = data.[index]
+      updateWavesurferRegion datum
+      seekCenterWavesurfer( datum.Start )
+      { model with Index = index; Datum = datum },[]
     | Keys.Down,Coding 
     | Keys.Enter,Coding -> 
       if wavesurfer.isPlaying() then wavesurfer.pause()
       data.[model.Index] <- model.Datum //automatically save current datum to global
-      let newModel =
-        if model.Index < data.Length - 1 then
-          let datum = data.[model.Index + 1]
-          updateWavesurferRegion datum
-          seekCenterWavesurfer( datum.Start )
-          { model with Index = model.Index + 1; Datum = datum }
-        else
-          model
-      ( newModel,[] )
+      let index = nextValidDatumIndex model.Index 1
+      let datum = data.[index]
+      updateWavesurferRegion datum
+      seekCenterWavesurfer( datum.Start )
+      { model with Index = index; Datum = datum },[]
     //For all other key commands we do nothing
     | _,_ -> model,[]
 
@@ -502,6 +527,8 @@ let view model dispatch =
                         [ str "Down Arrow -> Next datum" ]
                       Dropdown.Item.a [ ]
                         [ str "Enter -> Next datum" ]
+                      Dropdown.Item.a [ ]
+                        [ str "C -> Copy (for splitting)" ]
                       Dropdown.Item.a [ ]
                         [ str "D -> Shift start earlier" ] 
                       Dropdown.Item.a [ ]
