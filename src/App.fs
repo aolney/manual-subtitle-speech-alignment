@@ -108,6 +108,7 @@ module Keys =
     let [<Literal>] Up = 38. //go to previous datum
     let [<Literal>] Right = 39.
     let [<Literal>] Down = 40. //go to next datum
+    let [<Literal>] B = 66. //bug background noises (South Park specific)
     let [<Literal>] C = 67. //make a copy (for splitting a record)
     //keys for adjusting times
     let [<Literal>] D = 68. //shift start earlier
@@ -270,7 +271,7 @@ let update msg (model:Model) =
           else
             d
         )) |> ignore
-    let index = nextValidDatumIndex 0 1
+    let index = nextValidDatumIndex -1 1
     ( {model with Index=index; Datum=data.[index] }, [])
 
   | WaveSurferReady -> 
@@ -337,6 +338,8 @@ let update msg (model:Model) =
     | Keys.M, Coding -> { model with Datum = {model.Datum with Status = "music" }} ,[]
     //Coding status problem: noise
     | Keys.N, Coding -> { model with  Datum = {model.Datum with Status = "noise" }},[]
+    //Coding status problem: bug noise
+    | Keys.B, Coding -> { model with  Datum = {model.Datum with Status = "crickets" }},[]
     //Coding status problem: overlapping speech
     | Keys.O, Coding -> { model with  Datum = {model.Datum with Status = "overlapping speech" }},[]
     //Coding status problem: wrong character
@@ -545,6 +548,8 @@ let view model dispatch =
                         [ str "M -> Status music problem" ] 
                       Dropdown.Item.a [ ]
                         [ str "N -> Status noise problem" ] 
+                      Dropdown.Item.a [ ]
+                        [ str "B -> Status noise problem (bugs/crickets)" ] 
                       Dropdown.Item.a [ ]
                         [ str "O -> Status overlapping speech" ] 
                       Dropdown.Item.a [ ]
