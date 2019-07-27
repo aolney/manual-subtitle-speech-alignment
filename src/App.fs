@@ -121,10 +121,11 @@ module Keys =
     let [<Literal>] M = 77. //music
     let [<Literal>] N = 78. //noise
     let [<Literal>] O = 79. //overlapping speech
+    let [<Literal>] P = 80. //pleading
     let [<Literal>] W = 87. //wrong character
     let [<Literal>] X = 88. //other problem
-    //keys for review
-    let [<Literal>] P = 80. //play entire clip
+    let [<Literal>] Y = 89. //yelling
+    
 
 let subscribeToKeyEvents dispatch =
     window.addEventListener("keydown", fun ev ->
@@ -301,7 +302,6 @@ let update msg (model:Model) =
       | TextEdit -> { model with Mode=Coding},[]
       | _ -> (model,[])
     //Play wav clip
-    | Keys.P, Coding 
     | Keys.Space, Coding ->
       wavesurfer.play ( float(model.Datum.Start) / 1000.0 , float(model.Datum.Stop) / 1000.0 )
       model,[]
@@ -342,10 +342,14 @@ let update msg (model:Model) =
     | Keys.B, Coding -> { model with  Datum = {model.Datum with Status = "crickets" }},[]
     //Coding status problem: overlapping speech
     | Keys.O, Coding -> { model with  Datum = {model.Datum with Status = "overlapping speech" }},[]
+    //Coding status problem: pleading
+    | Keys.P, Coding -> { model with  Datum = {model.Datum with Status = "pleading" }},[]
     //Coding status problem: wrong character
     | Keys.W, Coding -> { model with  Datum = {model.Datum with Status = "wrong character" }},[]
     //Coding status problem: x-factor
     | Keys.X, Coding -> { model with  Datum = {model.Datum with Status = "other" }},[]        
+    //Coding status problem: yelling
+    | Keys.Y, Coding -> { model with  Datum = {model.Datum with Status = "yelling" }},[] 
     | Keys.Up,Coding -> 
       data.[model.Index] <- model.Datum //automatically save current datum to global
       let index = nextValidDatumIndex model.Index -1
@@ -541,7 +545,7 @@ let view model dispatch =
                       Dropdown.Item.a [ ]
                         [ str "K -> Shift stop later" ] 
                       Dropdown.Item.a [ ]
-                        [ str "P or Space -> Play datum audio" ] 
+                        [ str "Space -> Play datum audio" ] 
                       Dropdown.Item.a [ ]
                         [ str "G -> Status good" ] 
                       Dropdown.Item.a [ ]
@@ -549,13 +553,17 @@ let view model dispatch =
                       Dropdown.Item.a [ ]
                         [ str "N -> Status noise problem" ] 
                       Dropdown.Item.a [ ]
+                        [ str "P -> Status pleading problem" ] 
+                      Dropdown.Item.a [ ]
                         [ str "B -> Status noise problem (bugs/crickets)" ] 
                       Dropdown.Item.a [ ]
                         [ str "O -> Status overlapping speech" ] 
                       Dropdown.Item.a [ ]
                         [ str "W -> Status wrong character" ]  
                       Dropdown.Item.a [ ]
-                        [ str "X -> Status bad other" ]                                                                                                                                                                                                                         
+                        [ str "X -> Status bad other" ]        
+                      Dropdown.Item.a [ ]
+                        [ str "Y -> Status yelling problem" ]                                                                                                                                                                                                                  
                         ] ] ]
         ]
       ]
