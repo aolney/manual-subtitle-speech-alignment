@@ -81,6 +81,7 @@ type Model =
     JsonFile : Browser.Types.File option
     Index : int
     Datum : Datum
+    SkipTags : string
   }
 
 type Msg =
@@ -94,6 +95,7 @@ type Msg =
     | WaveSurferReady
     | UpdateStart of string
     | UpdateStop of string
+    | UpdateSkipTags of string
     | KeyDown of float
 
 /// Mapped to functions for increased speed; some of these aren't used
@@ -151,6 +153,7 @@ let init () : Model * Cmd<Msg> =
           ExpandedText= ""
           Status = ""
         }
+      SkipTags = "automaticallyfiltered"
     }, [subscribeToKeyEvents] )
 
 //Globals
@@ -204,7 +207,7 @@ let boundedTimeShift newTime =
   else
     newTime
 
-let nextValidDatumIndex startIndex step =
+let nextValidDatumIndex startIndex step (skipTags:string) =
   let mutable index = startIndex + step
   let mutable notFound = true
   while notFound do
@@ -219,7 +222,9 @@ let nextValidDatumIndex startIndex step =
       notFound <- false
     //in bounds, filtered, advance
     else if
-      data.[index].Status = "automaticallyfiltered" then
+      //do not skip empty entries; skip entries we've defined
+      data.[index].Status <> "" && skipTags.Split(',') |> Array.exists( fun tag -> tag = data.[index].Status ) then
+      //data.[index].Status = "automaticallyfiltered" then
       index <- index + step
     //in bounds, regular, stop
     else
@@ -272,7 +277,7 @@ let update msg (model:Model) =
           else
             d
         )) |> ignore
-    let index = nextValidDatumIndex -1 1
+    let index = nextValidDatumIndex -1 1 model.SkipTags
     ( {model with Index=index; Datum=data.[index] }, [])
 
   | WaveSurferReady -> 
@@ -291,6 +296,9 @@ let update msg (model:Model) =
   | UpdateStop(input) ->
     let datum = { model.Datum with Stop=System.Int32.Parse(input) }
     ( {model with Datum=datum }, [])
+
+  | UpdateSkipTags( input ) ->
+    ( {model with SkipTags=input }, [])
 
   | KeyDown code ->
     match code, model.Mode with
@@ -352,7 +360,7 @@ let update msg (model:Model) =
     | Keys.Y, Coding -> { model with  Datum = {model.Datum with Status = "yelling" }},[] 
     | Keys.Up,Coding -> 
       data.[model.Index] <- model.Datum //automatically save current datum to global
-      let index = nextValidDatumIndex model.Index -1
+      let index = nextValidDatumIndex model.Index -1 model.SkipTags
       let datum = data.[index]
       updateWavesurferRegion datum
       seekCenterWavesurfer( datum.Start )
@@ -361,7 +369,7 @@ let update msg (model:Model) =
     | Keys.Enter,Coding -> 
       if wavesurfer.isPlaying() then wavesurfer.pause()
       data.[model.Index] <- model.Datum //automatically save current datum to global
-      let index = nextValidDatumIndex model.Index 1
+      let index = nextValidDatumIndex model.Index 1 model.SkipTags
       let datum = data.[index]
       updateWavesurferRegion datum
       seekCenterWavesurfer( datum.Start )
@@ -516,55 +524,72 @@ let view model dispatch =
             ] [ str "Get Results" ]
         ]
         Fulma.Column.column [ Column.Width (Screen.All, Column.IsNarrow) ] [
-          Dropdown.dropdown [ Dropdown.IsHoverable ]
-            [ div [ ]
-                [ Button.button [ ]
-                    [ span [ ]
-                        [ str "Key Command Menu" ]
-                      Icon.icon [ Icon.Size IsSmall ]
-                        [ Fa.i [ Fa.Solid.AngleDown ]
-                            [ ] ] ] ]
-              Dropdown.menu [ ]
-                [ Dropdown.content [ ]
-                    [ Dropdown.Item.a [ ]
-                        [ str "Esc -> Change mode" ]
-                      Dropdown.Item.a [ ]
-                        [ str "Up Arrow -> Previous datum" ]
-                      Dropdown.Item.a [ ]
-                        [ str "Down Arrow -> Next datum" ]
-                      Dropdown.Item.a [ ]
-                        [ str "Enter -> Next datum" ]
-                      Dropdown.Item.a [ ]
-                        [ str "C -> Copy (for splitting)" ]
-                      Dropdown.Item.a [ ]
-                        [ str "D -> Shift start earlier" ] 
-                      Dropdown.Item.a [ ]
-                        [ str "F -> Shift start later" ] 
-                      Dropdown.Item.a [ ]
-                        [ str "J -> Shift stop earlier" ] 
-                      Dropdown.Item.a [ ]
-                        [ str "K -> Shift stop later" ] 
-                      Dropdown.Item.a [ ]
-                        [ str "Space -> Play datum audio" ] 
-                      Dropdown.Item.a [ ]
-                        [ str "G -> Status good" ] 
-                      Dropdown.Item.a [ ]
-                        [ str "M -> Status music problem" ] 
-                      Dropdown.Item.a [ ]
-                        [ str "N -> Status noise problem" ] 
-                      Dropdown.Item.a [ ]
-                        [ str "P -> Status pleading problem" ] 
-                      Dropdown.Item.a [ ]
-                        [ str "B -> Status noise problem (bugs/crickets)" ] 
-                      Dropdown.Item.a [ ]
-                        [ str "O -> Status overlapping speech" ] 
-                      Dropdown.Item.a [ ]
-                        [ str "W -> Status wrong character" ]  
-                      Dropdown.Item.a [ ]
-                        [ str "X -> Status bad other" ]        
-                      Dropdown.Item.a [ ]
-                        [ str "Y -> Status yelling problem" ]                                                                                                                                                                                                                  
-                        ] ] ]
+          Field.div [] [
+            Dropdown.dropdown [ Dropdown.IsHoverable ]
+              [ div [ ]
+                  [ Button.button [ ]
+                      [ span [ ]
+                          [ str "Key Command Menu" ]
+                        Icon.icon [ Icon.Size IsSmall ]
+                          [ Fa.i [ Fa.Solid.AngleDown ]
+                              [ ] ] ] ]
+                Dropdown.menu [ ]
+                  [ Dropdown.content [ ]
+                      [ Dropdown.Item.a [ ]
+                          [ str "Esc -> Change mode" ]
+                        Dropdown.Item.a [ ]
+                          [ str "Up Arrow -> Previous datum" ]
+                        Dropdown.Item.a [ ]
+                          [ str "Down Arrow -> Next datum" ]
+                        Dropdown.Item.a [ ]
+                          [ str "Enter -> Next datum" ]
+                        Dropdown.Item.a [ ]
+                          [ str "C -> Copy (for splitting)" ]
+                        Dropdown.Item.a [ ]
+                          [ str "D -> Shift start earlier" ] 
+                        Dropdown.Item.a [ ]
+                          [ str "F -> Shift start later" ] 
+                        Dropdown.Item.a [ ]
+                          [ str "J -> Shift stop earlier" ] 
+                        Dropdown.Item.a [ ]
+                          [ str "K -> Shift stop later" ] 
+                        Dropdown.Item.a [ ]
+                          [ str "Space -> Play datum audio" ] 
+                        Dropdown.Item.a [ ]
+                          [ str "G -> Status good" ] 
+                        Dropdown.Item.a [ ]
+                          [ str "M -> Status music problem" ] 
+                        Dropdown.Item.a [ ]
+                          [ str "N -> Status noise problem" ] 
+                        Dropdown.Item.a [ ]
+                          [ str "P -> Status pleading problem" ] 
+                        Dropdown.Item.a [ ]
+                          [ str "B -> Status noise problem (bugs/crickets)" ] 
+                        Dropdown.Item.a [ ]
+                          [ str "O -> Status overlapping speech" ] 
+                        Dropdown.Item.a [ ]
+                          [ str "W -> Status wrong character" ]  
+                        Dropdown.Item.a [ ]
+                          [ str "X -> Status bad other" ]        
+                        Dropdown.Item.a [ ]
+                          [ str "Y -> Status yelling problem" ]                                                                                                                                                                                                                  
+                          ] ] ]
+          ]
+          Field.div [ ] [ 
+            str "Ignore codes (comma separated)" 
+            ]
+          textarea [ //Textarea.textarea
+            ClassName "input"
+            Value model.SkipTags
+            Size 100.0
+            Style [
+                Width "100%"
+                Height "35px"
+            ] 
+            OnChange (fun ev ->  !!ev.target?value |> UpdateSkipTags |> dispatch )
+            // Textarea.Value model.SkipTags
+            // Textarea.OnChange (fun ev ->  !!ev.target?value |> UpdateSkipTags |> dispatch )
+          ] []
         ]
       ]
     ]  
