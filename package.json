@@ -46,7 +46,7 @@
     "loglevel": "^1.5.0",
     "mini-css-extract-plugin": "^0.5.0",
     "mocha": "^6.0.2",
-    "node-sass": "^4.12.0",
+    "node-sass": "^7.0.0",
     "raf-stub": "^2.0.2",
     "remotedev": "^0.2.9",
     "resolve-url-loader": "^3.1.0",
